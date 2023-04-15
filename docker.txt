@@ -1,0 +1,135 @@
+docker file
+команды docker состоят из трех частей docker (docker obj) subcommand
+docker obj -- image/node/container and so on
+Для того чтобы запустить контейнер на основе docker o,age можно использовать
+docker container run image_name начальная комнда запуска.
+docker container ls -a вывод всех конетейнкров
+command указывает с какой начальной командой бллыл запущен контейнер.
+docker obj rm -f -- force remove
+Можно комбинировать несколько команд docker obj rm -f $(docker obj ls -aq)
+Для запуска вместе с териминалом docker container run -it --name name_contaimer image_name /bin/bash
+docker container pause name
+Для запуска контейнера в demone mode(detach mode) можно использовать -d
+docker container run -d -it --name ...
+-it -- интеракционной терминал
+docker container pause name -- приостановить контейнер
+docker container unpause name
+docker container stop name
+Для удаления докера с хоста docker container rm name
+Для подключения к контейнеру запущенному в detach mode надо указать docker container attach name
+exit чтобы покинуть interact mode
+Для запуск в background можно использовать docker container start test1, чтобы запуститься в интерационной форме docker container -a test1
+-a -- attach
+Ctrl+P then Ctrl+Q чтобы покинуть интеракционный терминал не закрывая программу.
+Чтобы посмотреть все команды которые выполнялись в контейнере docker logs name
+docker conatiner run -d -it --name name base_image /bin/bash
+Чтобы сохранить свой образ можно выполнить 
+docker container commit test1 testimage
+Также сохранять свои образы можно с помощью dockerfile
+Самый простой вариант dockerfile:
+from ubuntu:latest
+run apt-get update && apt-get install curl -y
+
+Чтобы собрать образ на основе dockerfile
+docker image build -t name_for_new_image .
+-t создать образ с тегом, . означает что собран образ должен быть на основе файла расположенного здесь
+docker history name -- чтобы узнать все слои в основе образа.
+Чтобы дать tag docker image можно ввести docker image tag <image Id> <image name>, чтобы удалить все образы без тега docker image prune
+
+Чтобы запушить container в docker file
+1) Надо переименовать наш image  docker image tag image_file_base <your username>/image_name
+2)docker login и после этого нужно ввести имя и пароль в dockerhub
+3)docker image push image_name
+Команды Dockerfile
+Одни команды создают новые слои, а другие добавляют метаданные.
+
+create new layer: FROM, RUN, COPY
+add metadata: expose, workdir, env, entrypoint
+
+from
+1) для установления base image. Для создания без базового образа from scratch
+2) можно использовать много раз 
+example: from ubuntu
+
+maintainer
+1) добавляет имя создателья базового образа
+example: maintainer <artem.vecherinin@mail.ru>
+
+copy
+1) для копирования файлов и директорий из локального хоста в докер
+copy test /newdir/test
+
+Add является расширением copy
+
+Разница между add and copy
+1) с add можно использовать url адреса
+2) add поддерживает доп возможности такие как local-only tar extraction
+3) может поддерживать регулярные выражения
+
+env устанавливает переменные среды в контейнере 
+example: env log_dir /var/log
+
+user определяет имя root пользователя
+user 75 engy -- устанавливает user_id и user_name
+
+workdir для установки рабочей директории.
+Пути указанные в workdir объединяются те например workdir /var workdir source равнозначно workdir /var/source и все команды будут выполнять в объединенном репозитории.
+
+Volume создает директорию в image filesystem, 
+
+expose 
+1)делает доступным порт контейнера из браузера, вне контейнера
+2) можно указать несколько портов в одной линии
+3) стандартно docker использует tcp протокол
+4) expose 8081 80/udp -- использует порт 8081 как tcp и 80 как udp
+
+run устанавливает любой пакет как новый слой внутри image во время build time
+
+Разница между run и cmd 
+1) сmd выполняется когда run container from image, а run во время build time of image
+2) можно использовать run много раз, а cmd если указать несколько раз то сработает только последний.
+3) health check можно добавить cmd' HEALTHCHECK CMD curl --fail || exit 1, который говорит docker уничтожить container c exit status 1 если контйенер dealth fails
+example: cmd comanda
+
+entrypoint для мгновенного запуска исполняемой команды при создании еонтейнера из изображения
+1) entrypoint переписывает инструкции cmd и параметры cmd используются как аргументы entrypoint
+cmd "hello"
+entrypoint echo 
+в результате на экран выведется "hello"
+
+Можно фильтровать вывод команд ls:
+docker image inspect -format='{{.Architecture}} {{.Os}}' image_id
+docker image ls --filter dangling=true
+
+multistage build используются для создания оптимального образа на основе прошлых чтобы сохранить image маленьким. Для этого dockerfile содержит несколько from инструкций пример такой программы:
+FROM golang:1.16 AS builder
+WORKDIR /go/src/github.com/alexellis/href-counter/
+RUN go get -d -v golang.org/x/net/html
+COPY app.go    .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+WORKDIR /root/
+COPY --from=builder /go/src/github.com/alexellis/href-counter/app .
+CMD ["./app"]
+
+
+networking
+Стандартно ресурсы docker ограничины от интернета внутри sandbox. Sandbox -- изоляция контейнера от интернета и других контейнеров по умолчанию. Sandbox включает ethernet interface, ports, routing tables, dnc config
+Каждый раз когда создается контейнер он получает уникальный ip. 
+docker container inspect <container name or id> -- для получения ip
+docker inspect --format='{{.NetworkSettings.IPAddress}}' <container/is>
+По дефолту контейнер сконнектится к bridge network. Чтобы посмотреть networks -- docker network ls
+
+3 network стандартных:
+none -- loopback(lo) интерфейс для локальной коммуникации внутри контейнера
+host -- контейнер прикрепляется к gost network stack и испльзует ip адрес и порты хоста.
+bridge -- испльзовать --net option для docker run subcommand
+Тк контейнеры изолированы по умолчанию, они коммиуницируют испльзуя endpoints/virtual Ethrnet intraface где пакета передаются по docker0 network. dockre0 связь между виртуальным ethernet и eth0
+
+Можно устанавливать связь между контейнерами. Для набора контейнеров определяется набор network к которым они подключаются.
+Для создания нового user defined bridge network -- docker network create --driver bridge mynet
+При запуске docker image нужно испльзовать --net mynet чтобы подключить контейнер к сети
+docker network connect bridge c3 -- позволяет контейнеру c3 подключаться к обычному bridge network.
+docker network inspect mynet -- чтобы посмотреть все контейнеры прикрепленные к mynet network
+чтобы протестировать что подключение было удачным скачаем пинг
